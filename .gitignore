@@ -1,0 +1,19 @@
+# Data (raw ACS files — fetch with fetch_acs.py)
+data/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Results (regenerate with reproduce_results.py)
+# results/  # uncomment to exclude figures/tables from version control
