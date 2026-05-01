@@ -18,17 +18,12 @@ ACS 1-Year Estimates for all U.S. census places with population ≥ 65,000 (~800
 ```
 acs-city-clustering/
 ├── data/
-│   ├── raw/          # ACS downloads (not committed — see fetch_acs.py)
+│   ├── raw/          # ACS downloads (not committed — run fetch_acs.py first)
 │   └── processed/    # cleaned, standardized feature matrix
-├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 02_preprocessing.ipynb
-│   ├── 03_clustering.ipynb
-│   └── 04_stability_analysis.ipynb
 ├── src/
 │   ├── data/
-│   │   ├── fetch_acs.py      # Census API pull
-│   │   └── preprocess.py     # cleaning, standardization, PCA
+│   │   ├── fetch_acs.py      # Census API pull + population filter
+│   │   └── preprocess.py     # cleaning, rate engineering, standardization, PCA
 │   ├── models/
 │   │   ├── kmeans.py
 │   │   └── gmm.py
@@ -50,11 +45,15 @@ acs-city-clustering/
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Fetch ACS data (requires free Census API key)
-#    Set env var: export CENSUS_API_KEY=your_key_here
+# 2. Add your Census API key to .env (copy from .env.example)
+#    Get a free key at: https://api.census.gov/data/key_signup.html
+cp .env.example .env
+# then edit .env and set CENSUS_API_KEY=your_key_here
+
+# 3. Fetch ACS data
 python src/data/fetch_acs.py
 
-# 3. Reproduce all results and figures
+# 4. Reproduce all results and figures
 python reproduce_results.py
 ```
 

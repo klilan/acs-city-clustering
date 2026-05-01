@@ -41,6 +41,7 @@ from src.utils.plotting import (
     cluster_profile_heatmap,
     stability_histogram,
     pca_scree_plot,
+    correlation_heatmap,
 )
 
 PROCESSED_DIR = Path("data/processed")
@@ -78,6 +79,23 @@ def main():
     feature_cols = X_scaled.columns.tolist()
 
     print(f"  Cities: {len(city_index)}  |  Features: {X.shape[1]}")
+
+    # Multicollinearity diagnostics
+    print("  Saving correlation matrix...")
+    corr = pd.read_csv(PROCESSED_DIR / "correlation_matrix.csv", index_col=0)
+    correlation_heatmap(corr)
+    high_corr = [
+        (c1, c2, corr.loc[c1, c2])
+        for i, c1 in enumerate(corr.columns)
+        for c2 in corr.columns[i + 1:]
+        if abs(corr.loc[c1, c2]) >= 0.8
+    ]
+    if high_corr:
+        print(f"  High correlations (|r| >= 0.8):")
+        for c1, c2, r in sorted(high_corr, key=lambda x: -abs(x[2])):
+            print(f"    {c1} × {c2}: {r:.3f}")
+    else:
+        print("  No feature pairs with |r| >= 0.8")
 
     # PCA scree (diagnostics only — clustering uses full feature matrix)
     pca_loadings = pd.read_csv(PROCESSED_DIR / "pca_loadings.csv", index_col=0)
@@ -211,6 +229,37 @@ def main():
     sens_df = pd.DataFrame(sensitivity_records)
     sens_df.to_csv(TABLES_DIR / "sensitivity_cov_k.csv", index=False)
     print(sens_df.to_string(index=False))
+
+    # Feature subset sensitivity — drop one policy domain at a time
+    print("\n  Feature subset sensitivity (leave-one-domain-out):")
+    DOMAIN_FEATURES = {
+        "housing":           ["homeownership_rate", "median_gross_rent", "rent_burden_rate", "vacancy_rate"],
+        "household_finance": ["poverty_rate", "gini_index", "median_household_income", "childhood_poverty_rate"],
+        "economic_health":   ["labor_force_participation_rate", "youth_unemployment_rate"],
+        "education":         ["hs_or_higher_rate", "bachelors_or_higher_rate"],
+    }
+
+    subset_records = []
+    for dropped_domain, dropped_cols in DOMAIN_FEATURES.items():
+        keep_idx = [i for i, c in enumerate(feature_cols) if c not in dropped_cols]
+        X_sub = X[:, keep_idx]
+        g_sub = fit_gmm(X_sub, k)
+        labs_sub = g_sub.predict(X_sub)
+        if len(np.unique(labs_sub)) < 2:
+            continue
+        sil_sub = silhouette(X_sub, labs_sub)
+        # Agreement with full-feature GMM labels
+        agreement = np.mean(labs_sub == gmm_labels)
+        subset_records.append({
+            "dropped_domain": dropped_domain,
+            "n_features": len(keep_idx),
+            "silhouette": round(sil_sub, 4),
+            "label_agreement_with_full": round(agreement, 4),
+        })
+        print(f"    drop {dropped_domain}: sil={sil_sub:.4f}, agreement={agreement:.3f}")
+
+    subset_df = pd.DataFrame(subset_records)
+    subset_df.to_csv(TABLES_DIR / "sensitivity_feature_subsets.csv", index=False)
 
     # -----------------------------------------------------------------------
     # Summary

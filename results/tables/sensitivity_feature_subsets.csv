@@ -1,0 +1,5 @@
+dropped_domain,n_features,silhouette,label_agreement_with_full
+housing,8,0.0102,0.4606
+household_finance,8,0.0212,0.2789
+economic_health,10,0.0891,0.1578
+education,10,0.0172,0.0349

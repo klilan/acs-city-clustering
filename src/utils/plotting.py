@@ -109,6 +109,32 @@ def stability_histogram(stability_df: pd.DataFrame, save: bool = True) -> plt.Fi
     return fig
 
 
+def correlation_heatmap(corr: pd.DataFrame, save: bool = True) -> plt.Figure:
+    with plt.style.context(STYLE):
+        fig, ax = plt.subplots(figsize=(10, 8))
+        mask = np.triu(np.ones_like(corr, dtype=bool))
+        sns.heatmap(
+            corr,
+            mask=mask,
+            annot=True,
+            fmt=".2f",
+            cmap="RdBu_r",
+            center=0,
+            vmin=-1,
+            vmax=1,
+            ax=ax,
+            linewidths=0.4,
+            annot_kws={"size": 7},
+        )
+        ax.set_title("Feature Correlation Matrix (Pearson)")
+        plt.xticks(rotation=45, ha="right", fontsize=8)
+        plt.yticks(fontsize=8)
+        fig.tight_layout()
+    if save:
+        fig.savefig(FIGURES_DIR / "correlation_matrix.png", dpi=150, bbox_inches="tight")
+    return fig
+
+
 def pca_scree_plot(explained_variance_ratio: np.ndarray, save: bool = True) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(7, 4))

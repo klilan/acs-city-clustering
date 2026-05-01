@@ -12,6 +12,9 @@ import os
 import requests
 import pandas as pd
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ACS 1-year survey year
 ACS_YEAR = 2023
@@ -19,6 +22,8 @@ ACS_YEAR = 2023
 # Census variable codes -> human-readable names
 # Each feature variable is paired with its MOE (_M suffix)
 VARIABLES = {
+    # Population (used for size filter; controlled total — no MOE published)
+    "B01003_001E": "total_population",
     # Housing
     "B25064_001E": "median_gross_rent",
     "B25064_001M": "median_gross_rent_moe",
@@ -56,12 +61,13 @@ VARIABLES = {
     # Education
     "B15003_017E": "hs_diploma",
     "B15003_018E": "ged_or_alt",
-    "B15003_021E": "some_college_1yr",
-    "B15003_022E": "assoc_degree",
-    "B15003_023E": "bachelors_degree",
-    "B15003_024E": "masters_degree",
-    "B15003_025E": "professional_degree",
-    "B15003_026E": "doctoral_degree",
+    "B15003_019E": "some_college_lt1yr",
+    "B15003_020E": "some_college_1yr",
+    "B15003_021E": "assoc_degree",
+    "B15003_022E": "bachelors_degree",
+    "B15003_023E": "masters_degree",
+    "B15003_024E": "professional_degree",
+    "B15003_025E": "doctoral_degree",
     "B15003_001E": "edu_universe",
 }
 
@@ -83,7 +89,13 @@ def fetch_acs(api_key: str, year: int = ACS_YEAR) -> pd.DataFrame:
     resp = requests.get(base_url, params=params, timeout=60)
     resp.raise_for_status()
 
-    data = resp.json()
+    try:
+        data = resp.json()
+    except Exception as e:
+        raise ValueError(
+            f"Census API returned non-JSON response (status {resp.status_code}).\n"
+            f"Response text: {resp.text[:500]}"
+        ) from e
     df = pd.DataFrame(data[1:], columns=data[0])
     df = df.rename(columns=VARIABLES)
 
@@ -99,9 +111,9 @@ def fetch_acs(api_key: str, year: int = ACS_YEAR) -> pd.DataFrame:
 
 def filter_population(df: pd.DataFrame, pop_threshold: int = 65_000) -> pd.DataFrame:
     """Keep only places with population >= pop_threshold using ACS total population."""
-    # B01003_001E is total population — fetch separately or filter post-join.
-    # For now, flag for downstream filtering after joining population data.
-    print(f"  NOTE: Population filter (>= {pop_threshold}) applied in preprocess.py after joining pop estimates.")
+    before = len(df)
+    df = df[df["total_population"] >= pop_threshold].copy()
+    print(f"  Population filter (>= {pop_threshold:,}): {before} → {len(df)} places")
     return df
 
 
@@ -115,6 +127,7 @@ def main():
 
     RAW_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     df = fetch_acs(api_key)
+    df = filter_population(df)
     df.to_csv(RAW_OUTPUT, index=False)
     print(f"Saved raw data to {RAW_OUTPUT} ({len(df)} rows)")
 

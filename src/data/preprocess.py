@@ -14,6 +14,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from propagate_se import moe_to_se, wrap_ufloat, unwrap_ufloat, safe_divide_elements
 
 RANDOM_SEED = 42
 POP_THRESHOLD = 65_000
@@ -40,86 +41,109 @@ FEATURE_COLS = [
 MOE_COLS = [f"{c}_moe" for c in FEATURE_COLS]
 
 
+def _ratio_moe_se(
+    num: pd.Series, den: pd.Series,
+    num_moe: pd.Series, den_moe: pd.Series,
+) -> pd.Series:
+    """
+    Propagate MOE for a ratio p = num/den using propagate_se.
+
+    Converts ACS 90% MOEs to SEs, wraps as ufloats, divides element-wise
+    (using safe_divide_elements to avoid spurious correlation when num is a
+    subset of den), then unwraps and converts the propagated SE back to a
+    90% MOE.
+    """
+    num_se = moe_to_se(num_moe)   # z=1.645 (ACS default)
+    den_se = moe_to_se(den_moe)
+
+    import uncertainties as uc
+    result_moes = []
+    for n_val, d_val, n_se, d_se in zip(num, den, num_se, den_se):
+        if pd.isna(n_val) or pd.isna(d_val) or d_val == 0:
+            result_moes.append(np.nan)
+            continue
+        n_uf = uc.ufloat(n_val, max(n_se, 0) if not pd.isna(n_se) else 0)
+        d_uf = uc.ufloat(d_val, max(d_se, 0) if not pd.isna(d_se) else 0)
+        ratio = safe_divide_elements(n_uf, d_uf)
+        if isinstance(ratio, float):
+            result_moes.append(np.nan)
+        else:
+            result_moes.append(ratio.std_dev * 1.645)  # SE → 90% MOE
+
+    return pd.Series(result_moes, index=num.index)
+
+
 def engineer_rates(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert raw counts to rates/proportions and propagate MOEs."""
+    """Convert raw counts to rates/proportions and propagate MOEs via propagate_se."""
     out = df.copy()
 
     # Homeownership rate
     out["homeownership_rate"] = out["owner_occupied"] / out["total_occupied"]
-    out["homeownership_rate_moe"] = _ratio_moe(
+    out["homeownership_rate_moe"] = _ratio_moe_se(
         out["owner_occupied"], out["total_occupied"],
         out["owner_occupied_moe"], out["total_occupied_moe"],
     )
 
     # Rent burden rate (>= 30% income)
     out["rent_burden_rate"] = out["rent_burden_30plus"] / out["renter_total"]
-    out["rent_burden_rate_moe"] = _ratio_moe(
+    out["rent_burden_rate_moe"] = _ratio_moe_se(
         out["rent_burden_30plus"], out["renter_total"],
         out["rent_burden_30plus_moe"], out["renter_total_moe"],
     )
 
     # Vacancy rate
     out["vacancy_rate"] = out["vacant_units"] / out["total_units"]
-    out["vacancy_rate_moe"] = _ratio_moe(
+    out["vacancy_rate_moe"] = _ratio_moe_se(
         out["vacant_units"], out["total_units"],
         out["vacant_units_moe"], out["total_units_moe"],
     )
 
     # Poverty rate
     out["poverty_rate"] = out["poverty_count"] / out["poverty_universe"]
-    out["poverty_rate_moe"] = _ratio_moe(
+    out["poverty_rate_moe"] = _ratio_moe_se(
         out["poverty_count"], out["poverty_universe"],
         out["poverty_count_moe"], out["poverty_universe_moe"],
     )
 
-    # Gini index (already a rate)
+    # Gini index (already a rate; MOE fetched directly)
     out["gini_index_moe"] = out.get("gini_index_moe", np.nan)
 
     # Childhood poverty rate
     out["childhood_poverty_rate"] = out["childhood_poverty_count_all"] / out["poverty_universe"]
-    out["childhood_poverty_rate_moe"] = _ratio_moe(
+    out["childhood_poverty_rate_moe"] = _ratio_moe_se(
         out["childhood_poverty_count_all"], out["poverty_universe"],
         out["childhood_poverty_count_all_moe"], out["poverty_universe_moe"],
     )
 
     # Labor force participation rate
     out["labor_force_participation_rate"] = out["labor_force"] / out["pop_16plus"]
-    out["labor_force_participation_rate_moe"] = _ratio_moe(
+    out["labor_force_participation_rate_moe"] = _ratio_moe_se(
         out["labor_force"], out["pop_16plus"],
         out["labor_force_moe"], out["pop_16plus_moe"],
     )
 
     # Youth unemployment rate (proxy: youth unemployed / labor force)
+    # No MOE available for youth unemployed counts — treated as zero uncertainty (limitation)
     out["youth_unemployed"] = out["youth_unemployed_m"].fillna(0) + out["youth_unemployed_f"].fillna(0)
     out["youth_unemployment_rate"] = out["youth_unemployed"] / out["labor_force"]
-    out["youth_unemployment_rate_moe"] = np.nan  # simplified; composite MOE
+    out["youth_unemployment_rate_moe"] = np.nan
 
-    # HS or higher rate
+    # HS or higher rate — composite count, no direct MOE available (limitation)
     hs_cols = [
-        "hs_diploma", "ged_or_alt", "some_college_1yr", "assoc_degree",
-        "bachelors_degree", "masters_degree", "professional_degree", "doctoral_degree",
+        "hs_diploma", "ged_or_alt", "some_college_lt1yr", "some_college_1yr",
+        "assoc_degree", "bachelors_degree", "masters_degree", "professional_degree", "doctoral_degree",
     ]
     out["hs_or_higher_count"] = out[hs_cols].sum(axis=1)
     out["hs_or_higher_rate"] = out["hs_or_higher_count"] / out["edu_universe"]
-    out["hs_or_higher_rate_moe"] = np.nan  # composite
+    out["hs_or_higher_rate_moe"] = np.nan
 
-    # Bachelor's or higher rate
+    # Bachelor's or higher rate — composite count, no direct MOE available (limitation)
     ba_cols = ["bachelors_degree", "masters_degree", "professional_degree", "doctoral_degree"]
     out["ba_or_higher_count"] = out[ba_cols].sum(axis=1)
     out["bachelors_or_higher_rate"] = out["ba_or_higher_count"] / out["edu_universe"]
-    out["bachelors_or_higher_rate_moe"] = np.nan  # composite
+    out["bachelors_or_higher_rate_moe"] = np.nan
 
     return out
-
-
-def _ratio_moe(num: pd.Series, den: pd.Series, num_moe: pd.Series, den_moe: pd.Series) -> pd.Series:
-    """Approximate MOE for a ratio p = num/den using Census recommended formula."""
-    p = num / den
-    # Census formula: MOE(p) = (1/den) * sqrt(num_moe^2 - p^2 * den_moe^2)
-    # Use sum formula when radicand is negative (rare edge case)
-    radicand = num_moe**2 - p**2 * den_moe**2
-    radicand = radicand.clip(lower=0)   # fallback to sum formula avoids complex numbers
-    return (1 / den) * np.sqrt(radicand)
 
 
 def drop_missing(df: pd.DataFrame, feature_cols: list) -> pd.DataFrame:
@@ -158,11 +182,8 @@ def main():
     df = pd.read_csv(RAW_PATH)
     print(f"  Loaded {len(df)} rows")
 
-    # NOTE: Population filter — requires joining B01003_001E total population
-    # If you fetched it in fetch_acs.py, filter here:
-    if "total_population" in df.columns:
-        df = df[df["total_population"] >= POP_THRESHOLD]
-        print(f"  After population filter (>={POP_THRESHOLD}): {len(df)} rows")
+    # Population filter applied in fetch_acs.py (places >= 65,000); log count here for confirmation.
+    print(f"  Places after population filter: {len(df)}")
 
     print("Engineering rate features...")
     df = engineer_rates(df)
@@ -177,6 +198,14 @@ def main():
     X = df[FEATURE_COLS].reset_index(drop=True)
     X_moe = df[MOE_COLS].reset_index(drop=True)
 
+    # Report MOE coverage — features with no MOE are treated as zero uncertainty in stability analysis
+    missing_moe = [col for col in MOE_COLS if X_moe[col].isna().all()]
+    if missing_moe:
+        print(f"  WARNING: {len(missing_moe)} feature(s) have no MOE data and will be treated as "
+              f"zero uncertainty in stability analysis (understates instability for these features):")
+        for col in missing_moe:
+            print(f"    - {col.replace('_moe', '')}")
+
     # Save unscaled for reference
     X.to_csv(PROCESSED_DIR / "X_raw_rates.csv", index=False)
 
@@ -188,6 +217,10 @@ def main():
     X_moe_scaled = X_moe / scaler.scale_
     X_moe_scaled.columns = MOE_COLS
     X_moe_scaled.to_csv(PROCESSED_DIR / "X_moe_scaled.csv", index=False)
+
+    print("Computing feature correlation matrix...")
+    corr = X.corr()
+    corr.to_csv(PROCESSED_DIR / "correlation_matrix.csv")
 
     print("Running PCA for diagnostics...")
     pca, loadings, n_90 = maybe_apply_pca(X_scaled)
