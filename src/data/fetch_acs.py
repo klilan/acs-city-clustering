@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ACS 1-year survey year
-ACS_YEAR = 2023
+ACS_YEAR = 2024
 
 # Census variable codes -> human-readable names
 # Each feature variable is paired with its MOE (_M suffix)
