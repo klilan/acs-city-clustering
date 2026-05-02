@@ -2,11 +2,13 @@
 **EN.685.640 Mathematical Reasoning and Structure for Data Science — Final Project**
 K'lila Nooning | Spring 2026
 
+**Release:** [v1.0.0](../../releases/tag/v1.0.0) — ACS 2024 1-Year Estimates, baseline city typology (K=8 GMM)
+
 ## Problem Statement
 Can U.S. cities be meaningfully grouped into governance-relevant typologies using ACS socioeconomic indicators, producing interpretable profiles for municipal decision-making?
 
 ## Dataset
-ACS 1-Year Estimates for all U.S. census places with population ≥ 65,000 (~800 cities, 12 features across four policy domains: Housing, Household Finance, Economic Health, Education). Each feature is accompanied by its Margin of Error (MOE) for stability analysis.
+ACS 1-Year Estimates (2024) for all U.S. census places with population ≥ 65,000 — **546 cities** across all 50 states, D.C., and Puerto Rico. 12 features across four policy domains: Housing, Household Finance, Economic Health, and Education. Each feature is accompanied by its Margin of Error (MOE) for stability analysis.
 
 ## Approach (Track C: Clustering / Unsupervised Learning)
 1. **Preprocessing** — z-score standardize features, assess multicollinearity, apply PCA if warranted
