@@ -128,7 +128,7 @@ def main():
 
     # Select K: GMM BIC minimum
     k_best_gmm = int(gmm_sweep_df.loc[gmm_sweep_df["bic"].idxmin(), "k"])
-    k_best_km = int(km_sweep.loc[km_sweep["wcss"].diff().diff().idxmin(), "k"])  # elbow heuristic
+    k_best_km = int(km_sweep.loc[km_sweep["wcss"].diff().diff().idxmax(), "k"])  # elbow heuristic
     print(f"\n  Selected K (GMM/BIC): {k_best_gmm}")
     print(f"  Selected K (KMeans/elbow): {k_best_km}")
 

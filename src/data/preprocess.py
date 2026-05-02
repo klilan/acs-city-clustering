@@ -14,7 +14,7 @@ import pandas as pd
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from propagate_se import moe_to_se, wrap_ufloat, unwrap_ufloat, safe_divide_elements
+from propagate_se import moe_to_se, safe_divide_elements
 
 RANDOM_SEED = 42
 POP_THRESHOLD = 65_000
