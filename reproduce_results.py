@@ -2,8 +2,12 @@
 reproduce_results.py
 End-to-end pipeline: preprocess -> cluster -> evaluate -> stability -> figures/tables.
 
+Runs both the 50-states+DC analysis and the Puerto Rico analysis by default.
+
 Usage:
-    python reproduce_results.py
+    python reproduce_results.py                  # run both (default)
+    python reproduce_results.py --only states_dc # 50 states + DC only
+    python reproduce_results.py --only pr        # Puerto Rico only
 
 Requires:
     - data/raw/acs_places_raw.csv  (run src/data/fetch_acs.py first)
@@ -12,6 +16,7 @@ Requires:
 Random seed: 42 (fixed globally below)
 """
 
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -286,4 +291,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--only",
+        choices=["states_dc", "pr"],
+        default=None,
+        help="Run only one subset analysis (default: run both)",
+    )
+    args = parser.parse_args()
+
+    if args.only != "pr":
+        main()
+
+    if args.only != "states_dc":
+        from src.analysis.puerto_rico import main as run_pr_analysis
+        run_pr_analysis()
