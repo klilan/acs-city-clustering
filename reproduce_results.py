@@ -2,8 +2,12 @@
 reproduce_results.py
 End-to-end pipeline: preprocess -> cluster -> evaluate -> stability -> figures/tables.
 
+Runs both the 50-states+DC analysis and the Puerto Rico analysis by default.
+
 Usage:
-    python reproduce_results.py
+    python reproduce_results.py                  # run both (default)
+    python reproduce_results.py --only states_dc # 50 states + DC only
+    python reproduce_results.py --only pr        # Puerto Rico only
 
 Requires:
     - data/raw/acs_places_raw.csv  (run src/data/fetch_acs.py first)
@@ -12,6 +16,7 @@ Requires:
 Random seed: 42 (fixed globally below)
 """
 
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -46,11 +51,16 @@ from src.utils.plotting import (
 
 PROCESSED_DIR = Path("data/processed")
 RESULTS_DIR = Path("results")
-TABLES_DIR = RESULTS_DIR / "tables"
+TABLES_DIR = RESULTS_DIR / "tables" / "states_dc_analysis"
+FIGURES_DIR = RESULTS_DIR / "figures" / "states_dc_analysis"
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 K_RANGE = range(2, 11)
 K_BOOTSTRAP = 1000
+
+# Puerto Rico (FIPS 72) is excluded from the main pipeline; see src/analysis/puerto_rico.py
+PR_FIPS = 72
 
 
 def load_processed():
@@ -58,7 +68,15 @@ def load_processed():
     X_moe = pd.read_csv(PROCESSED_DIR / "X_moe_scaled.csv")
     X_raw = pd.read_csv(PROCESSED_DIR / "X_raw_rates.csv")
     city_index = pd.read_csv(PROCESSED_DIR / "city_index.csv")
-    return X_scaled, X_moe, X_raw, city_index
+
+    mask = city_index["state"] != PR_FIPS
+    idx = mask[mask].index
+    return (
+        X_scaled.loc[idx].reset_index(drop=True),
+        X_moe.loc[idx].reset_index(drop=True),
+        X_raw.loc[idx].reset_index(drop=True),
+        city_index.loc[idx].reset_index(drop=True),
+    )
 
 
 def main():
@@ -83,7 +101,7 @@ def main():
     # Multicollinearity diagnostics
     print("  Saving correlation matrix...")
     corr = pd.read_csv(PROCESSED_DIR / "correlation_matrix.csv", index_col=0)
-    correlation_heatmap(corr)
+    correlation_heatmap(corr, out_dir=FIGURES_DIR)
     high_corr = [
         (c1, c2, corr.loc[c1, c2])
         for i, c1 in enumerate(corr.columns)
@@ -104,7 +122,7 @@ def main():
     # Use sklearn PCA directly for explained variance
     from sklearn.decomposition import PCA
     pca = PCA(random_state=RANDOM_SEED).fit(X)
-    pca_scree_plot(pca.explained_variance_ratio_)
+    pca_scree_plot(pca.explained_variance_ratio_, out_dir=FIGURES_DIR)
 
     # -----------------------------------------------------------------------
     # 2. K selection — sweep K for both models
@@ -117,13 +135,13 @@ def main():
     km_sweep = kmeans_sweep(X, K_RANGE)
     elbow_df = elbow_table(km_sweep)
     elbow_df.to_csv(TABLES_DIR / "kmeans_elbow.csv", index=False)
-    elbow_plot(km_sweep)
+    elbow_plot(km_sweep, out_dir=FIGURES_DIR)
     print(elbow_df.to_string(index=False))
 
     print("\n  Fitting GMM over K =", list(K_RANGE), "...")
     gmm_sweep_df = gmm_sweep(X, K_RANGE)
     gmm_sweep_df.to_csv(TABLES_DIR / "gmm_bic_aic.csv", index=False)
-    bic_plot(gmm_sweep_df)
+    bic_plot(gmm_sweep_df, out_dir=FIGURES_DIR)
     print(gmm_sweep_df.to_string(index=False))
 
     # Select K: GMM BIC minimum
@@ -157,7 +175,7 @@ def main():
     print(f"  Silhouette (KMeans): {sil_km:.4f}")
 
     sil_samples_gmm = silhouette_per_city(X, gmm_labels)
-    silhouette_plot(sil_samples_gmm, gmm_labels, k)
+    silhouette_plot(sil_samples_gmm, gmm_labels, k, out_dir=FIGURES_DIR)
 
     # -----------------------------------------------------------------------
     # 4. Cluster profiles
@@ -171,6 +189,7 @@ def main():
     cluster_profile_heatmap(
         summarize_clusters(X_scaled, gmm_labels, city_index),
         feature_cols,
+        out_dir=FIGURES_DIR,
     )
 
     print(profile.to_string())
@@ -193,7 +212,7 @@ def main():
     stab_gmm = moe_bootstrap_gmm(X, X_moe, gmm, B=K_BOOTSTRAP)
     stab_gmm["city"] = city_index["NAME"].values
     stab_gmm.to_csv(TABLES_DIR / "stability_gmm.csv", index=False)
-    stability_histogram(stab_gmm)
+    stability_histogram(stab_gmm, out_dir=FIGURES_DIR)
     gmm_summary = stability_summary(stab_gmm)
     print("  GMM stability summary:", gmm_summary)
 
@@ -275,4 +294,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--only",
+        choices=["states_dc", "pr"],
+        default=None,
+        help="Run only one subset analysis (default: run both)",
+    )
+    args = parser.parse_args()
+
+    if args.only != "pr":
+        main()
+
+    if args.only != "states_dc":
+        from src.analysis.puerto_rico import main as run_pr_analysis
+        run_pr_analysis()

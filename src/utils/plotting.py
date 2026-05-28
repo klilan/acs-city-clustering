@@ -10,13 +10,19 @@ import seaborn as sns
 from pathlib import Path
 
 FIGURES_DIR = Path("results/figures")
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 STYLE = "seaborn-v0_8-whitegrid"
 PALETTE = "tab10"
 
 
-def elbow_plot(wcss_df: pd.DataFrame, save: bool = True) -> plt.Figure:
+def _save(fig: plt.Figure, out_dir: Path, filename: str) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_dir / filename, dpi=150, bbox_inches="tight")
+
+
+def elbow_plot(
+    wcss_df: pd.DataFrame, save: bool = True, out_dir: Path = FIGURES_DIR,
+) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.plot(wcss_df["k"], wcss_df["wcss"], marker="o")
@@ -24,11 +30,13 @@ def elbow_plot(wcss_df: pd.DataFrame, save: bool = True) -> plt.Figure:
         ax.set_ylabel("WCSS (Inertia)")
         ax.set_title("K-Means Elbow Plot")
     if save:
-        fig.savefig(FIGURES_DIR / "elbow_plot.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "elbow_plot.png")
     return fig
 
 
-def bic_plot(bic_df: pd.DataFrame, save: bool = True) -> plt.Figure:
+def bic_plot(
+    bic_df: pd.DataFrame, save: bool = True, out_dir: Path = FIGURES_DIR,
+) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.plot(bic_df["k"], bic_df["bic"], marker="s", label="BIC")
@@ -38,7 +46,7 @@ def bic_plot(bic_df: pd.DataFrame, save: bool = True) -> plt.Figure:
         ax.set_title("GMM Model Selection")
         ax.legend()
     if save:
-        fig.savefig(FIGURES_DIR / "bic_aic_plot.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "bic_aic_plot.png")
     return fig
 
 
@@ -47,6 +55,7 @@ def silhouette_plot(
     labels: np.ndarray,
     k: int,
     save: bool = True,
+    out_dir: Path = FIGURES_DIR,
 ) -> plt.Figure:
     from matplotlib import cm
     with plt.style.context(STYLE):
@@ -66,7 +75,7 @@ def silhouette_plot(
         ax.set_title(f"Silhouette Plot (K={k})")
         ax.legend()
     if save:
-        fig.savefig(FIGURES_DIR / f"silhouette_k{k}.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, f"silhouette_k{k}.png")
     return fig
 
 
@@ -74,6 +83,7 @@ def cluster_profile_heatmap(
     summary: pd.DataFrame,
     feature_cols: list,
     save: bool = True,
+    out_dir: Path = FIGURES_DIR,
 ) -> plt.Figure:
     data = summary[feature_cols]
     with plt.style.context(STYLE):
@@ -91,11 +101,13 @@ def cluster_profile_heatmap(
         ax.set_xlabel("Feature")
         ax.set_ylabel("Cluster")
     if save:
-        fig.savefig(FIGURES_DIR / "cluster_profiles.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "cluster_profiles.png")
     return fig
 
 
-def stability_histogram(stability_df: pd.DataFrame, save: bool = True) -> plt.Figure:
+def stability_histogram(
+    stability_df: pd.DataFrame, save: bool = True, out_dir: Path = FIGURES_DIR,
+) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.hist(stability_df["stability_rate"], bins=20, edgecolor="white")
@@ -105,11 +117,13 @@ def stability_histogram(stability_df: pd.DataFrame, save: bool = True) -> plt.Fi
         ax.set_title("MOE-Bootstrap Assignment Stability")
         ax.legend()
     if save:
-        fig.savefig(FIGURES_DIR / "stability_histogram.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "stability_histogram.png")
     return fig
 
 
-def correlation_heatmap(corr: pd.DataFrame, save: bool = True) -> plt.Figure:
+def correlation_heatmap(
+    corr: pd.DataFrame, save: bool = True, out_dir: Path = FIGURES_DIR,
+) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(10, 8))
         mask = np.triu(np.ones_like(corr, dtype=bool))
@@ -131,11 +145,13 @@ def correlation_heatmap(corr: pd.DataFrame, save: bool = True) -> plt.Figure:
         plt.yticks(fontsize=8)
         fig.tight_layout()
     if save:
-        fig.savefig(FIGURES_DIR / "correlation_matrix.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "correlation_matrix.png")
     return fig
 
 
-def pca_scree_plot(explained_variance_ratio: np.ndarray, save: bool = True) -> plt.Figure:
+def pca_scree_plot(
+    explained_variance_ratio: np.ndarray, save: bool = True, out_dir: Path = FIGURES_DIR,
+) -> plt.Figure:
     with plt.style.context(STYLE):
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.bar(range(1, len(explained_variance_ratio) + 1), explained_variance_ratio)
@@ -152,5 +168,5 @@ def pca_scree_plot(explained_variance_ratio: np.ndarray, save: bool = True) -> p
         ax.set_title("PCA Scree Plot")
         ax.legend()
     if save:
-        fig.savefig(FIGURES_DIR / "pca_scree.png", dpi=150, bbox_inches="tight")
+        _save(fig, out_dir, "pca_scree.png")
     return fig
