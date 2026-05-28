@@ -52,13 +52,24 @@ TABLES_DIR.mkdir(parents=True, exist_ok=True)
 K_RANGE = range(2, 11)
 K_BOOTSTRAP = 1000
 
+# Puerto Rico (FIPS 72) is excluded from the main pipeline; see src/analysis/puerto_rico.py
+PR_FIPS = 72
+
 
 def load_processed():
     X_scaled = pd.read_csv(PROCESSED_DIR / "X_scaled.csv")
     X_moe = pd.read_csv(PROCESSED_DIR / "X_moe_scaled.csv")
     X_raw = pd.read_csv(PROCESSED_DIR / "X_raw_rates.csv")
     city_index = pd.read_csv(PROCESSED_DIR / "city_index.csv")
-    return X_scaled, X_moe, X_raw, city_index
+
+    mask = city_index["state"] != PR_FIPS
+    idx = mask[mask].index
+    return (
+        X_scaled.loc[idx].reset_index(drop=True),
+        X_moe.loc[idx].reset_index(drop=True),
+        X_raw.loc[idx].reset_index(drop=True),
+        city_index.loc[idx].reset_index(drop=True),
+    )
 
 
 def main():

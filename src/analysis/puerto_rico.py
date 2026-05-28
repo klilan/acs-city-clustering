@@ -14,10 +14,10 @@ NOTE ON SAMPLE SIZE:
   n=6 makes resampling statistics unreliable.
 
 Outputs (written relative to project root):
-  results/tables/pr_analysis/         -- PR tables
-  results/tables/continental_analysis/ -- continental tables
-  results/figures/pr_analysis/        -- PR figures
-  results/figures/continental_analysis/ -- continental figures
+  results/tables/pr_analysis/          -- PR tables
+  results/tables/states_dc_analysis/   -- 50 states + DC tables
+  results/figures/pr_analysis/         -- PR figures
+  results/figures/states_dc_analysis/  -- 50 states + DC figures
 
 Usage:
   python -m src.analysis.puerto_rico
@@ -44,7 +44,7 @@ RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
 
 PR_FIPS = 72
-CONTINENTAL_K_RANGE = range(2, 11)
+STATES_DC_K_RANGE = range(2, 11)
 PR_K_MAX = 3  # hard cap: n=6 cannot support more than 3 meaningful clusters
 PR_K_RANGE = range(2, PR_K_MAX + 1)
 BOOTSTRAP_B = 1000
@@ -81,7 +81,7 @@ def split_subsets(
     cont_mask = ~pr_mask
 
     subsets = {}
-    for label, mask in [("pr", pr_mask), ("continental", cont_mask)]:
+    for label, mask in [("pr", pr_mask), ("states_dc", cont_mask)]:
         idx = mask[mask].index
         subsets[label] = {
             "X_scaled": X_scaled.loc[idx].reset_index(drop=True),
@@ -355,13 +355,13 @@ def main():
     print(moe_df.to_string())
 
     # ------------------------------------------------------------------
-    # Continental analysis (full K range, with stability)
+    # 50 states + DC analysis (full K range, with stability)
     # ------------------------------------------------------------------
-    cont = subsets["continental"]
+    states_dc = subsets["states_dc"]
     cont_summary = run_subset_analysis(
-        cont["X_scaled"], cont["X_moe"], cont["X_raw"], cont["city_index"],
-        label="continental",
-        k_range=CONTINENTAL_K_RANGE,
+        states_dc["X_scaled"], states_dc["X_moe"], states_dc["X_raw"], states_dc["city_index"],
+        label="states_dc",
+        k_range=STATES_DC_K_RANGE,
         B=BOOTSTRAP_B,
         run_stability=True,
     )
