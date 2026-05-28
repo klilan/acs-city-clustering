@@ -51,8 +51,10 @@ from src.utils.plotting import (
 
 PROCESSED_DIR = Path("data/processed")
 RESULTS_DIR = Path("results")
-TABLES_DIR = RESULTS_DIR / "tables"
+TABLES_DIR = RESULTS_DIR / "tables" / "states_dc_analysis"
+FIGURES_DIR = RESULTS_DIR / "figures" / "states_dc_analysis"
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 K_RANGE = range(2, 11)
 K_BOOTSTRAP = 1000
@@ -99,7 +101,7 @@ def main():
     # Multicollinearity diagnostics
     print("  Saving correlation matrix...")
     corr = pd.read_csv(PROCESSED_DIR / "correlation_matrix.csv", index_col=0)
-    correlation_heatmap(corr)
+    correlation_heatmap(corr, out_dir=FIGURES_DIR)
     high_corr = [
         (c1, c2, corr.loc[c1, c2])
         for i, c1 in enumerate(corr.columns)
@@ -120,7 +122,7 @@ def main():
     # Use sklearn PCA directly for explained variance
     from sklearn.decomposition import PCA
     pca = PCA(random_state=RANDOM_SEED).fit(X)
-    pca_scree_plot(pca.explained_variance_ratio_)
+    pca_scree_plot(pca.explained_variance_ratio_, out_dir=FIGURES_DIR)
 
     # -----------------------------------------------------------------------
     # 2. K selection — sweep K for both models
@@ -133,13 +135,13 @@ def main():
     km_sweep = kmeans_sweep(X, K_RANGE)
     elbow_df = elbow_table(km_sweep)
     elbow_df.to_csv(TABLES_DIR / "kmeans_elbow.csv", index=False)
-    elbow_plot(km_sweep)
+    elbow_plot(km_sweep, out_dir=FIGURES_DIR)
     print(elbow_df.to_string(index=False))
 
     print("\n  Fitting GMM over K =", list(K_RANGE), "...")
     gmm_sweep_df = gmm_sweep(X, K_RANGE)
     gmm_sweep_df.to_csv(TABLES_DIR / "gmm_bic_aic.csv", index=False)
-    bic_plot(gmm_sweep_df)
+    bic_plot(gmm_sweep_df, out_dir=FIGURES_DIR)
     print(gmm_sweep_df.to_string(index=False))
 
     # Select K: GMM BIC minimum
@@ -173,7 +175,7 @@ def main():
     print(f"  Silhouette (KMeans): {sil_km:.4f}")
 
     sil_samples_gmm = silhouette_per_city(X, gmm_labels)
-    silhouette_plot(sil_samples_gmm, gmm_labels, k)
+    silhouette_plot(sil_samples_gmm, gmm_labels, k, out_dir=FIGURES_DIR)
 
     # -----------------------------------------------------------------------
     # 4. Cluster profiles
@@ -187,6 +189,7 @@ def main():
     cluster_profile_heatmap(
         summarize_clusters(X_scaled, gmm_labels, city_index),
         feature_cols,
+        out_dir=FIGURES_DIR,
     )
 
     print(profile.to_string())
@@ -209,7 +212,7 @@ def main():
     stab_gmm = moe_bootstrap_gmm(X, X_moe, gmm, B=K_BOOTSTRAP)
     stab_gmm["city"] = city_index["NAME"].values
     stab_gmm.to_csv(TABLES_DIR / "stability_gmm.csv", index=False)
-    stability_histogram(stab_gmm)
+    stability_histogram(stab_gmm, out_dir=FIGURES_DIR)
     gmm_summary = stability_summary(stab_gmm)
     print("  GMM stability summary:", gmm_summary)
 
